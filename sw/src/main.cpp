@@ -4,7 +4,7 @@
 
 auto const g_led_count = 4;
 auto const g_led_pin = D4;
-auto const g_color_delay_ms = 7;
+auto const g_color_delay_ms = 19;
 
 Adafruit_NeoPixel g_pixels{g_led_count, g_led_pin, NEO_GRB | NEO_KHZ800};
 ColorRandomizer g_colRand;
