@@ -6,35 +6,27 @@ else
 SILENT:=@
 endif
 
-IN_SCADS := $(wildcard *.scad)
-IN_OBJS  := $(wildcard *.obj)
-IN_STLS  := $(wildcard *.stl)
-TARGETS  := $(IN_SCADS:.scad=) $(IN_STLS:.stl=) $(IN_OBJS:.obj=)
 
-.PHONY: all
-all: $(TARGETS) time
-
-.PHONY: $(TARGETS)
-$(TARGETS): Makefile
-	$(SILENT)+$(MAKE) --no-print-directory \
-		PRINTER=$(shell  if [ -n "$(PRINTER)"  ] ; then echo "$(PRINTER)"  ; else grep "^PRINTER"  project.mk "$@.config" 2>/dev/null | tail -1 | sed 's/.*=//' ; fi) \
-		FILAMENT=$(shell if [ -n "$(FILAMENT)" ] ; then echo "$(FILAMENT)" ; else grep "^FILAMENT" project.mk "$@.config" 2>/dev/null | tail -1 | sed 's/.*=//' ; fi) \
-		MODE=$(shell     if [ -n "$(MODE)"     ] ; then echo "$(MODE)"     ; else grep "^MODE"     project.mk "$@.config" 2>/dev/null | tail -1 | sed 's/.*=//' ; fi) \
-		CUSTOM_CONFIG=$(shell [ -f "$@.ini" ] && echo "$@.ini") \
-		VERBOSE=$(VERBOSE) \
-		"build/$@.proxy"
-
-
-ifneq ($(PRINTER),)
+SCADS := $(wildcard *.scad)
+OBJS  := $(wildcard *.obj)
+STLS_REPO := $(addprefix build/, $(wildcard *.stl))
+STLS_CONV := $(addprefix build/, $(OBJS:.obj=.stl))
+STLS_GEN  := $(addprefix build/, $(SCADS:.scad=.stl))
+STLS := $(STLS_REPO) $(STLS_CONV) $(STLS_GEN)
+STLS := $(sort $(STLS))  # remove duplicates
+DEPS := $(STLS_GEN:.stl=.stl.d)
 
 SCAD_FLAGS+=--hardwarnings
 SCAD_FLAGS+=--check-parameters true
 SCAD_FLAGS+=--check-parameter-ranges true
 
-build/%.proxy: \
-		build/$(PRINTER)/$(FILAMENT)/$(MODE)/%.time \
-		Makefile
-	$(SILENT)true
+
+.PHONY: all
+all: pla petg tpu silk
+
+.PHONY: pla petg tpu silk
+pla petg tpu silk:
+	$(SILENT)+$(MAKE) FILAMENT=$@ time gcode md5
 
 build/%.stl: %.scad Makefile
 	$(SILENT)echo "OPENSCAD $<"
@@ -53,21 +45,39 @@ build/%.stl: %.obj Makefile
 
 -include $(DEPS)
 
-build/$(PRINTER)/$(FILAMENT)/$(MODE)/%.ini: \
-		config/printer/$(PRINTER)/printer.ini \
-		config/printer/$(PRINTER)/filament/$(FILAMENT)/filament.ini \
-		config/printer/$(PRINTER)/filament/$(FILAMENT)/mode/$(MODE).ini \
-		$(CUSTOM_CONFIG)
-	$(SILENT)echo "CONFIG $(notdir $@)"
-	$(SILENT)mkdir -p "$$(dirname "$@")"
-	$(SILENT)merge_ini -o "$@" -i $^
 
-build/$(PRINTER)/$(FILAMENT)/$(MODE)/%.gcode: \
-		build/%.stl \
-		build/$(PRINTER)/$(FILAMENT)/$(MODE)/%.ini \
-		Makefile
-	$(SILENT)echo "SLICER $(PRINTER)/$(FILAMENT)/$(MODE)/$(notdir $<)"
-	$(SILENT)prusa-slicer --load "$($@:.gcode=.ini)" --export-gcode --output "$@" "$<" > "$@.log"
+ifneq (,$(FILAMENT))
+
+STLS_FILAMENT := $(join $(addsuffix $(FILAMENT)/, $(dir $(STLS))), $(notdir $(STLS)) )
+
+GCODES := $(STLS_FILAMENT:.stl=.gcode)
+MD5S   := $(GCODES:.gcode=.gcode.md5)
+TIMES  := $(GCODES:.gcode=.time)
+
+
+config/$(FILAMENT)/patch.ini:
+	$(SILENT)echo "CREATE $(FILAMENT)/patch.ini"
+	$(SILENT)touch "$@"
+
+build/$(FILAMENT)/config.ini: config/$(FILAMENT)/template.ini config/$(FILAMENT)/patch.ini Makefile
+	$(SILENT)echo "CONFIG $(FILAMENT).ini"
+	$(SILENT)mkdir -p "build/$(FILAMENT)"
+	$(SILENT)sed 's/\([^ ]*\) *=.*/^\1 *=/' "config/$(FILAMENT)/patch.ini" > "$@.grep"
+	$(SILENT)grep -v -f "$@.grep" "$<" > "$@.short"
+	$(SILENT)cat "$@.short" "config/$(FILAMENT)/patch.ini" > "$@"
+
+
+.PHONY: gcode
+gcode: $(GCODES) $(MD5S)
+
+build/$(FILAMENT)/%.gcode: build/%.stl build/$(FILAMENT)/config.ini Makefile
+	$(SILENT)echo "SLICER $(FILAMENT)/$(notdir $<)"
+	$(SILENT)prusa-slicer --load "build/$(FILAMENT)/config.ini" --export-gcode --output "$@" "$<" > "$@.log"
+
+
+.PHONY: time
+time: $(TIMES)
+	$(SILENT)[ -z "$(TIMES)" ] || head -100 $(TIMES)
 
 # 'gcoder' is a part of 'printrun' package (http://www.pronterface.com) / apt install printrun
 # note that script is not executable, so you may want to have a wrapper script to run it
@@ -75,12 +85,21 @@ build/$(PRINTER)/$(FILAMENT)/$(MODE)/%.gcode: \
 	$(SILENT)echo "TIMING $(FILAMENT)/$(notdir $<)"
 	$(SILENT)TMP=$(shell mktemp) ; gcoder "$<" > "$$TMP" 2>&1 && mv "$$TMP" "$@" || { rm -f "$$TMP" ; false ; }
 
-endif
+
+.PHONY: md5
+md5: $(MD5S)
+
+%.gcode.md5 : %.gcode
+	$(SILENT)echo "MD5 $(FILAMENT)/$(notdir $<)"
+	$(SILENT)TMP=$(shell mktemp) ; md5sum "$<" > "$$TMP" 2>&1 && mv "$$TMP" "$@" || { rm -f "$$TMP" ; false ; }
+
+.PHONY: md5_check
+md5_check: | $(MD5S)
+	$(SILENT)cat $(MD5S) | md5sum -c
 
 
-.PHONY: time
-time: $(TARGETS)
-	$(SILENT)find build/ -type f -name '*.time' -exec tail -n 1 {} +
+endif # $(FILAMENT) set
+
 
 .PHONY: clean
 clean:
