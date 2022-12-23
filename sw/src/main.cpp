@@ -1,31 +1,18 @@
 #include <Arduino.h>
 #include <Adafruit_NeoPixel.h>
+#include "ColorRandomizer.hpp"
 
 auto const g_led_count = 4;
 auto const g_led_pin = D4;
+auto const g_color_delay_ms = 71;
 
 Adafruit_NeoPixel g_pixels{g_led_count, g_led_pin, NEO_GRB | NEO_KHZ800};
-
-struct Color
-{
-  uint8_t r{0};
-  uint8_t g{0};
-  uint8_t b{0};
-};
-
-
-auto randomize_color()
-{
-  Color c;
-  c = Color{255, 0, 255};
-  // TODO: random fire stuff
-  return c;
-}
+ColorRandomizer g_colRand;
 
 
 auto randomize_brightness()
 {
-  uint8_t b{10};
+  uint8_t b{20};
   return b;
 }
 
@@ -34,7 +21,7 @@ void update_leds()
 {
   g_pixels.clear();
 
-  auto const c = randomize_color();
+  auto const c = g_colRand.randomize();
   for(auto i=0; i<g_led_count; ++i)
     g_pixels.setPixelColor(i, c.r, c.g, c.b);
 
@@ -57,5 +44,5 @@ void loop()
 {
   wdt_reset();
   update_leds();
-  delay(10);  // [ms]
+  delay(g_color_delay_ms);
 }
