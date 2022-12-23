@@ -1,6 +1,5 @@
-wall = 2*0.4;
+include <detail/config.scad>
 h = 100;
-d = 30;
 
 module fin()
 {
@@ -38,7 +37,7 @@ module bottom()
       cylinder(d1=d+a+2*wall, d2=d+2*wall, h=a); // nozzle cut
     }
     cylinder(d=d, h=h-2*wall);      // main block
-    #translate([0, 0, h])
+    translate([0, 0, h])
       cube([12, 5, 5*wall], center=true); // LED-pass + cable hole
     cylinder(d1=d+a, d2=d, h=a);    // nozzle cut
   }
