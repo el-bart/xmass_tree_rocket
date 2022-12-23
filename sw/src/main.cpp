@@ -4,17 +4,10 @@
 
 auto const g_led_count = 4;
 auto const g_led_pin = D4;
-auto const g_color_delay_ms = 71;
+auto const g_color_delay_ms = 29;
 
 Adafruit_NeoPixel g_pixels{g_led_count, g_led_pin, NEO_GRB | NEO_KHZ800};
 ColorRandomizer g_colRand;
-
-
-auto randomize_brightness()
-{
-  uint8_t b{20};
-  return b;
-}
 
 
 void update_leds()
@@ -25,8 +18,7 @@ void update_leds()
   for(auto i=0; i<g_led_count; ++i)
     g_pixels.setPixelColor(i, c.r, c.g, c.b);
 
-  auto const b = randomize_brightness();
-  g_pixels.setBrightness(b);
+  g_pixels.setBrightness(0xff);
 
   g_pixels.show();
 }
