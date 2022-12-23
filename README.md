@@ -4,6 +4,8 @@ tired of boring, religious stuff on the top of the xmass tree?
 me too.
 here's the rocket, with glowing exhaust, instead! :D
 
+![rocket photo on xmass tree](doc/photo.jpg)
+
 
 ## HW
 
